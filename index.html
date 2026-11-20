@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#080a10" />
+<meta name="description" content="VEXA — manage your Colab GPU runtime, Google credentials, and OpenAI-compatible model endpoint." />
+<title>VEXA · Colab GPU Platform</title>
+<link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+
+<!-- ------------------------------------------------------------- sign in -->
+<div id="gate" class="gate hidden">
+  <div class="gate-card">
+    <div class="gate-brand"><span class="brand-dot"></span> <span>VEXA</span></div>
+
+    <div id="gate-main">
+      <h1>Sign in</h1>
+      <p class="muted" id="gate-sub">Use your administrator password to reach the dashboard.</p>
+
+      <form id="gate-form" autocomplete="on" novalidate>
+        <div class="field-group">
+          <label class="field-label" for="gate-username">Username</label>
+          <input id="gate-username" name="username" type="text" spellcheck="false"
+                 autocomplete="username" autocapitalize="none" placeholder="admin" required />
+          <p class="field-error" data-error-for="gate-username"></p>
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="gate-password">Password</label>
+          <div class="secret-wrap">
+            <input id="gate-password" name="password" type="password" autocomplete="current-password"
+                   placeholder="••••••••••••" required />
+            <button type="button" class="reveal" data-reveal="gate-password" aria-label="Show password">Show</button>
+          </div>
+          <p class="field-error" data-error-for="gate-password"></p>
+        </div>
+
+        <button type="submit" class="btn block" id="gate-submit">
+          <span class="btn-label">Sign in</span>
+        </button>
+
+        <p class="form-error" id="gate-err" role="alert" aria-live="polite"></p>
+      </form>
+
+      <button type="button" class="link-btn" id="gate-toggle" aria-expanded="false" aria-controls="gate-key-form">
+        Use an operator key instead
+      </button>
+
+      <form id="gate-key-form" class="key-form" autocomplete="off" hidden novalidate>
+        <div class="field-group">
+          <label class="field-label" for="gate-key">Operator key</label>
+          <div class="secret-wrap">
+            <input type="password" id="gate-key" placeholder="vx-…" autocomplete="off" />
+            <button type="button" class="reveal" data-reveal="gate-key" aria-label="Show key">Show</button>
+          </div>
+          <p class="field-hint">The shared key from your deployment secrets.</p>
+        </div>
+        <button type="submit" class="btn block ghost" id="gate-key-submit">
+          <span class="btn-label">Unlock with key</span>
+        </button>
+        <p class="form-error" id="gate-key-err" role="alert" aria-live="polite"></p>
+      </form>
+    </div>
+
+    <div id="gate-setup" hidden>
+      <h1>First-run setup</h1>
+      <p class="muted">No administrator exists yet. Create one, or generate a strong password.</p>
+      <div class="field-group">
+        <label class="field-label" for="setup-username">Username</label>
+        <input id="setup-username" type="text" value="admin" spellcheck="false" autocapitalize="none" />
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="setup-password">Password</label>
+        <div class="secret-wrap">
+          <input id="setup-password" type="password" autocomplete="new-password" placeholder="At least 10 characters" />
+          <button type="button" class="reveal" data-reveal="setup-password" aria-label="Show password">Show</button>
+        </div>
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="setup-key">Operator key</label>
+        <div class="secret-wrap">
+          <input id="setup-key" type="password" autocomplete="off" placeholder="vx-…" />
+          <button type="button" class="reveal" data-reveal="setup-key" aria-label="Show key">Show</button>
+        </div>
+        <p class="field-hint">Proves you own this deployment. It is in your Worker secrets.</p>
+      </div>
+      <button type="button" class="btn block" id="setup-submit">Create administrator</button>
+      <p class="form-error" id="setup-err" role="alert" aria-live="polite"></p>
+      <div class="callout ok" id="setup-result" hidden>
+        <div class="callout-title">Save this password now</div>
+        <p class="small" id="setup-result-text"></p>
+        <p class="field-hint">It is shown once and cannot be recovered.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ----------------------------------------------------------- dashboard -->
+<div id="app" class="app hidden">
+  <div class="scrim" id="scrim" hidden></div>
+
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-head">
+      <div class="brand"><span class="brand-dot"></span> <span>VEXA</span></div>
+      <button class="icon-btn close-nav" id="nav-close" aria-label="Close navigation">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+
+    <nav id="nav" aria-label="Main">
+      <button class="nav active" data-view="overview">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+        <span>Overview</span>
+      </button>
+      <button class="nav" data-view="accounts">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+        <span>Google Accounts</span>
+      </button>
+      <button class="nav" data-view="runtime">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M9 9h6v6H9z"/></svg>
+        <span>Colab Runtime</span>
+      </button>
+      <button class="nav" data-view="model">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>
+        <span>Model Server</span>
+      </button>
+      <button class="nav" data-view="openhands">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7l-4 5 4 5M16 7l4 5-4 5"/><path d="M13.5 5l-3 14"/></svg>
+        <span>OpenHands</span>
+      </button>
+      <button class="nav" data-view="settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 1.56V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 9 19.4a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.56V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9a1.7 1.7 0 0 0 1.56 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.51 1z"/></svg>
+        <span>Settings</span>
+      </button>
+      <button class="nav" data-view="logs">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14M5 9h14M5 14h9M5 19h6"/></svg>
+        <span>Logs</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-foot">
+      <div id="pill-status" class="pill idle"><span class="pill-dot"></span><span class="pill-text">idle</span></div>
+      <button class="ghost-btn" id="lock">Lock</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <button class="icon-btn menu-btn" id="nav-open" aria-label="Open navigation">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+      <div class="topbar-titles">
+        <h1 id="view-title">Overview</h1>
+        <p class="muted" id="view-sub">Live platform status</p>
+      </div>
+      <div class="topbar-actions">
+        <span id="clock" class="muted small" aria-live="off"></span>
+        <button class="btn ghost" id="refresh">
+          <svg viewBox="0 0 24 24" aria-hidden="true" class="ico"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+          <span>Refresh</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- ------------------------------------------------------- overview -->
+    <section class="view" id="view-overview">
+      <div class="grid stats" id="stat-grid"></div>
+      <div class="grid two">
+        <div class="card">
+          <div class="card-head"><h2>Runtime state</h2></div>
+          <div id="runtime-state" class="kv"><div class="skeleton-row"></div><div class="skeleton-row"></div><div class="skeleton-row"></div></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Recent activity</h2></div>
+          <ul id="init-history" class="timeline"><li class="empty">Loading…</li></ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------- accounts -->
+    <section class="view hidden" id="view-accounts">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h2>Google accounts</h2>
+            <p class="muted small">Each account is a separate Google identity whose Colab runtime can host the model.</p>
+          </div>
+          <button class="btn" id="connect-account">Connect Google account</button>
+        </div>
+        <div class="table-wrap">
+          <table id="accounts-table">
+            <thead>
+              <tr><th>Identity</th><th>Status</th><th>Eligible</th><th>Runtime</th><th>Last used</th><th class="right">Actions</th></tr>
+            </thead>
+            <tbody><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h2>Colab notebook agent</h2>
+            <p class="muted small">
+              Colab's runtime API does not accept OAuth bearer tokens, so the supported
+              path is an agent you run in your own notebook. It registers with this
+              Worker, serves the model on the notebook's GPU, and shuts itself down
+              when the runtime is stopped from here.
+            </p>
+          </div>
+        </div>
+        <div class="row actions">
+          <button class="btn" id="agent-issue">Generate agent token</button>
+          <span class="muted small" id="agent-hint">Issuing a token revokes any previous one for the same account.</span>
+        </div>
+        <div id="agent-token-box" class="hidden">
+          <p class="muted small">
+            Paste this token into the notebook. It is shown once — it is not stored
+            anywhere retrievable, and it cannot be used to call inference or reach the
+            operator API.
+          </p>
+          <div class="copy-row">
+            <code id="agent-token-value"></code>
+            <button class="btn sm ghost" id="agent-token-copy" type="button">Copy</button>
+          </div>
+          <p class="muted small">Worker URL for the notebook: <code id="agent-worker-url"></code></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- -------------------------------------------------------- runtime -->
+    <section class="view hidden" id="view-runtime">
+      <div class="grid two">
+        <div class="card">
+          <div class="card-head"><h2>Active runtime</h2></div>
+          <div id="runtime-detail" class="kv"></div>
+          <div class="row actions">
+            <button class="btn" id="rt-start">Start runtime</button>
+            <button class="btn ghost" id="rt-stop">Stop (safe)</button>
+            <button class="btn ghost" id="rt-rotate">Switch account</button>
+            <button class="btn ghost" id="rt-logs">View logs</button>
+          </div>
+          <p class="muted small" id="rt-note"></p>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Startup progress</h2></div>
+          <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progress"><div id="progress-bar" class="bar"></div></div>
+          <p class="muted small" id="progress-step">—</p>
+          <div class="idle-box">
+            <div class="muted small">Idle countdown</div>
+            <div id="idle-count" class="big">—</div>
+            <p class="muted small" id="idle-note"></p>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Rotation history</h2></div>
+        <ul id="rotation-history" class="timeline"><li class="empty">No rotations recorded.</li></ul>
+      </div>
+    </section>
+
+    <!-- ---------------------------------------------------------- model -->
+    <section class="view hidden" id="view-model">
+      <div class="grid stats" id="model-stats"></div>
+      <div class="card">
+        <div class="card-head"><h2>Model server</h2></div>
+        <div id="model-detail" class="kv"></div>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------ openhands -->
+    <section class="view hidden" id="view-openhands">
+      <div class="card">
+        <div class="card-head"><h2>Connect OpenHands</h2></div>
+        <p class="muted small">
+          In OpenHands open <strong>Settings → LLM → Advanced</strong> and create a
+          “Local OpenAI-compatible server” profile with the values below.
+        </p>
+        <div class="fields" id="integration-fields"></div>
+        <div class="row actions">
+          <button class="btn" id="test-connection">Test connection</button>
+          <button class="btn ghost" id="new-key">Generate new API key</button>
+        </div>
+        <pre id="test-result" class="result hidden" aria-live="polite"></pre>
+        <div class="new-key-box" id="new-key-box" hidden>
+          <div class="new-key-head">
+            <strong>Your new API key</strong>
+            <button type="button" class="ghost-btn sm" id="new-key-dismiss">Done</button>
+          </div>
+          <div class="copy-row">
+            <code id="new-key-value" class="new-key-value"></code>
+            <button type="button" class="btn sm ghost" id="new-key-copy">Copy</button>
+          </div>
+          <p class="field-hint">
+            This is the only time the full key is shown. Store it somewhere safe now.
+          </p>
+        </div>
+        <p class="muted small warn-note" id="key-note"></p>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>API keys</h2></div>
+        <div class="table-wrap">
+          <table id="keys-table">
+            <thead><tr><th>Name</th><th>Prefix</th><th>Created</th><th>Last used</th><th class="right">Actions</th></tr></thead>
+            <tbody><tr><td colspan="5" class="empty">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------- settings -->
+    <section class="view hidden" id="view-settings">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <h2>Service connections</h2>
+            <p class="muted small">
+              Every status below comes from a live call to the provider. Nothing is cached or assumed.
+            </p>
+          </div>
+          <button class="btn ghost" id="check-all">
+            <svg viewBox="0 0 24 24" aria-hidden="true" class="ico"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+            <span>Re-check all</span>
+          </button>
+        </div>
+        <div class="connections" id="connection-cards">
+          <div class="conn-card skeleton"><div class="skeleton-row"></div><div class="skeleton-row"></div></div>
+          <div class="conn-card skeleton"><div class="skeleton-row"></div><div class="skeleton-row"></div></div>
+          <div class="conn-card skeleton"><div class="skeleton-row"></div><div class="skeleton-row"></div></div>
+          <div class="conn-card skeleton"><div class="skeleton-row"></div><div class="skeleton-row"></div></div>
+        </div>
+      </div>
+
+      <form id="settings-form" class="settings-form" novalidate>
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h2>Cloudflare</h2>
+              <p class="muted small">Used to manage this account's Workers, D1 and KV resources.</p>
+            </div>
+          </div>
+          <div class="form-grid">
+            <div class="field-group">
+              <label class="field-label" for="cloudflare_account_id">Account ID</label>
+              <input id="cloudflare_account_id" name="cloudflare_account_id" spellcheck="false"
+                     placeholder="32 hexadecimal characters" autocomplete="off" />
+              <p class="field-hint" id="hint-cloudflare_account_id"></p>
+              <p class="field-error" data-error-for="cloudflare_account_id"></p>
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="cloudflare_api_token">API token</label>
+              <div class="secret-wrap">
+                <input id="cloudflare_api_token" name="cloudflare_api_token" type="password" spellcheck="false"
+                       placeholder="Leave blank to keep the stored token" autocomplete="new-password" />
+                <button type="button" class="reveal" data-reveal="cloudflare_api_token" aria-label="Show token">Show</button>
+              </div>
+              <p class="field-hint" id="hint-cloudflare_api_token"></p>
+              <p class="field-error" data-error-for="cloudflare_api_token"></p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h2>Google OAuth &amp; Colab</h2>
+              <p class="muted small">Colab notebooks use these credentials to host the model runtime.</p>
+            </div>
+          </div>
+          <div class="form-grid">
+            <div class="field-group span-2">
+              <label class="field-label" for="google_client_id">Client ID</label>
+              <input id="google_client_id" name="google_client_id" spellcheck="false"
+                     placeholder="1234-abc.apps.googleusercontent.com" autocomplete="off" />
+              <p class="field-hint" id="hint-google_client_id"></p>
+              <p class="field-error" data-error-for="google_client_id"></p>
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="google_client_secret">Client secret</label>
+              <div class="secret-wrap">
+                <input id="google_client_secret" name="google_client_secret" type="password" spellcheck="false"
+                       placeholder="Leave blank to keep the stored secret" autocomplete="new-password" />
+                <button type="button" class="reveal" data-reveal="google_client_secret" aria-label="Show secret">Show</button>
+              </div>
+              <p class="field-hint" id="hint-google_client_secret"></p>
+              <p class="field-error" data-error-for="google_client_secret"></p>
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="google_refresh_token">Refresh token</label>
+              <div class="secret-wrap">
+                <input id="google_refresh_token" name="google_refresh_token" type="password" spellcheck="false"
+                       placeholder="Leave blank to keep the stored token" autocomplete="new-password" />
+                <button type="button" class="reveal" data-reveal="google_refresh_token" aria-label="Show token">Show</button>
+              </div>
+              <p class="field-hint" id="hint-google_refresh_token"></p>
+              <p class="field-error" data-error-for="google_refresh_token"></p>
+            </div>
+            <div class="field-group span-2">
+              <label class="field-label" for="colab_scope">Colab scopes</label>
+              <input id="colab_scope" name="colab_scope" spellcheck="false" autocomplete="off" />
+              <p class="field-hint" id="hint-colab_scope"></p>
+              <p class="field-error" data-error-for="colab_scope"></p>
+            </div>
+            <div class="field-group span-2">
+              <div class="callout">
+                <div class="callout-title">Authorized redirect URI</div>
+                <div class="copy-row">
+                  <code id="callback-url">—</code>
+                  <button type="button" class="btn sm ghost" id="copy-callback">Copy</button>
+                </div>
+                <p class="field-hint">This exact URL must be listed in your Google Cloud OAuth client.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h2>Devs.Surf DNS</h2>
+              <p class="muted small">
+                Owns the public subdomain. The key is sealed server-side and used by the Worker.
+              </p>
+            </div>
+            <span class="badge" id="dss-badge">checking…</span>
+          </div>
+          <div class="form-grid">
+            <div class="field-group span-2">
+              <label class="field-label" for="dss_api_key">API key</label>
+              <div class="secret-wrap">
+                <input id="dss_api_key" name="dss_api_key" type="password" spellcheck="false"
+                       placeholder="Leave blank to keep the stored key" autocomplete="new-password" />
+                <button type="button" class="reveal" data-reveal="dss_api_key" aria-label="Show API key">Show</button>
+              </div>
+              <p class="field-hint" id="hint-dss_api_key"></p>
+              <p class="field-error" data-error-for="dss_api_key"></p>
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="dss_fqdn">Subdomain</label>
+              <input id="dss_fqdn" name="dss_fqdn" spellcheck="false" inputmode="url"
+                     placeholder="colab.devs.surf" autocomplete="off" />
+              <p class="field-hint" id="hint-dss_fqdn"></p>
+              <p class="field-error" data-error-for="dss_fqdn"></p>
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="dss_target">CNAME target</label>
+              <input id="dss_target" name="dss_target" spellcheck="false" inputmode="url"
+                     placeholder="vexa-colab.adeniranj787.workers.dev" autocomplete="off" />
+              <p class="field-hint" id="hint-dss_target"></p>
+              <p class="field-error" data-error-for="dss_target"></p>
+            </div>
+          </div>
+          <div class="callout" id="dss-hint">
+            <div class="callout-title">Needs a Devs.Surf API key</div>
+            <p class="small">
+              Paste the key from <span class="mono">devs.surf</span> above and save. The Cloudflare
+              token is a different service and is never sent to Devs.Surf.
+            </p>
+          </div>
+          <div class="row actions dns-actions">
+            <button type="button" class="btn ghost" id="dss-test">
+              <span class="btn-label">Test connection</span>
+            </button>
+            <button type="button" class="btn ghost" id="dns-refresh">
+              <span class="btn-label">Load DNS records</span>
+            </button>
+            <button type="button" class="btn ghost" id="dns-add">
+              <span class="btn-label">Add record</span>
+            </button>
+          </div>
+          <div class="dns-add-form" id="dns-add-form" hidden>
+            <div class="form-grid">
+              <div class="field-group">
+                <label class="field-label" for="dns-type">Type</label>
+                <select id="dns-type">
+                  <option>CNAME</option>
+                  <option>A</option>
+                  <option>AAAA</option>
+                  <option>TXT</option>
+                </select>
+              </div>
+              <div class="field-group">
+                <label class="field-label" for="dns-name">Name</label>
+                <input id="dns-name" placeholder="@" spellcheck="false" autocomplete="off" />
+              </div>
+              <div class="field-group span-2">
+                <label class="field-label" for="dns-content">Content</label>
+                <input id="dns-content" placeholder="vexa-colab.adeniranj787.workers.dev"
+                       spellcheck="false" autocomplete="off" />
+              </div>
+            </div>
+            <p class="field-hint">
+              Devs.Surf only accepts hosting-verification TXT records (Vercel, Netlify,
+              Cloudflare, Google, Microsoft 365 and similar). SPF, DKIM and DMARC are
+              refused by the provider.
+            </p>
+            <div class="row actions">
+              <button type="button" class="btn ghost" id="dns-add-cancel">Cancel</button>
+              <button type="button" class="btn" id="dns-add-save">
+                <span class="btn-label">Create record</span>
+              </button>
+            </div>
+            <p class="form-error" id="dns-add-err" role="alert" aria-live="polite"></p>
+          </div>
+          <div id="dns-panel" class="dns-panel" hidden>
+            <div class="dns-head">
+              <h3 id="dns-domain">—</h3>
+              <button type="button" class="btn sm" id="dns-point">Point at this Worker</button>
+            </div>
+            <div class="table-wrap">
+              <table class="table" id="dns-table">
+                <thead>
+                  <tr><th>Type</th><th>Name</th><th>Content</th><th>TTL</th><th class="actions-cell">Actions</th></tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <p class="field-hint" id="dns-note"></p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h2>Administrator password</h2>
+              <p class="muted small">Signs you in to this dashboard. Changing it signs out other devices.</p>
+            </div>
+          </div>
+          <div class="form-grid">
+            <div class="field-group">
+              <label class="field-label" for="pw-current">Current password</label>
+              <div class="secret-wrap">
+                <input id="pw-current" type="password" autocomplete="current-password" placeholder="••••••••••" />
+                <button type="button" class="reveal" data-reveal="pw-current" aria-label="Show password">Show</button>
+              </div>
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="pw-new">New password</label>
+              <div class="secret-wrap">
+                <input id="pw-new" type="password" autocomplete="new-password" placeholder="At least 10 characters" />
+                <button type="button" class="reveal" data-reveal="pw-new" aria-label="Show password">Show</button>
+              </div>
+            </div>
+          </div>
+          <div class="row actions">
+            <button type="button" class="btn" id="pw-save">
+              <span class="btn-label">Update password</span>
+            </button>
+          </div>
+          <p class="form-error" id="pw-err" role="alert" aria-live="polite"></p>
+          <p class="field-hint" id="pw-hint"></p>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <h2>Platform</h2>
+              <p class="muted small">Model identity and idle shutdown policy.</p>
+            </div>
+          </div>
+          <div class="form-grid">
+            <div class="field-group">
+              <label class="field-label" for="model_served_id">Served model ID</label>
+              <input id="model_served_id" name="model_served_id" spellcheck="false" autocomplete="off" />
+              <p class="field-hint" id="hint-model_served_id"></p>
+              <p class="field-error" data-error-for="model_served_id"></p>
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="idle_timeout_minutes">Idle timeout (minutes)</label>
+              <input id="idle_timeout_minutes" name="idle_timeout_minutes" type="number" min="1" max="1440" step="1"
+                     inputmode="numeric" autocomplete="off" />
+              <p class="field-hint" id="hint-idle_timeout_minutes"></p>
+              <p class="field-error" data-error-for="idle_timeout_minutes"></p>
+            </div>
+          </div>
+        </div>
+
+        <div class="save-bar">
+          <p class="muted small" id="save-status" aria-live="polite"></p>
+          <div class="row actions">
+            <button type="button" class="btn ghost" id="settings-reset">Discard changes</button>
+            <button type="submit" class="btn" id="settings-save">
+              <span class="btn-label">Save settings</span>
+            </button>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <!-- ---------------------------------------------------------- logs -->
+    <section class="view hidden" id="view-logs">
+      <div class="card">
+        <div class="card-head">
+          <h2>Event log</h2>
+          <select id="log-limit" aria-label="Number of events">
+            <option value="50">50 events</option>
+            <option value="100" selected>100 events</option>
+            <option value="250">250 events</option>
+          </select>
+        </div>
+        <ul id="log-list" class="logs"><li class="empty">Loading…</li></ul>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script src="./app.js"></script>
+</body>
+</html>
